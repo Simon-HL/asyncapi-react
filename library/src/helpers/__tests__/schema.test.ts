@@ -915,4 +915,64 @@ describe('SchemaHelpers', () => {
       ).toMatchSnapshot();
     });
   });
+
+  describe('.mergeAllOf', () => {
+    test('should return undefined when schema has no allOf', () => {
+      const schema = new Schema({ type: 'object' });
+      const merged = SchemaHelpers.mergeAllOf(schema);
+      expect(merged).toBeUndefined();
+    });
+
+    test('should merge properties from allOf definitions', () => {
+      const schema = new Schema({
+        allOf: [
+          {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+            },
+            required: ['id'],
+          },
+          {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+            },
+            required: ['name'],
+          },
+        ],
+      });
+
+      const merged = SchemaHelpers.mergeAllOf(schema);
+      expect(merged).toBeDefined();
+      const properties = merged?.properties();
+      expect(Object.keys(properties ?? {})).toEqual(['id', 'name']);
+      expect(merged?.required()).toEqual(['id', 'name']);
+    });
+
+    test('should let later allOf entries override previous definitions', () => {
+      const schema = new Schema({
+        allOf: [
+          {
+            type: 'object',
+            properties: {
+              id: { type: 'string', description: 'base' },
+            },
+          },
+          {
+            type: 'object',
+            properties: {
+              id: { type: 'number', description: 'override' },
+            },
+          },
+        ],
+      });
+
+      const merged = SchemaHelpers.mergeAllOf(schema);
+      const props = merged?.properties();
+      const idProp = props ? props['id'] : undefined;
+      expect(idProp?.type()).toEqual('number');
+      expect(idProp?.description()).toEqual('override');
+    });
+  });
 });

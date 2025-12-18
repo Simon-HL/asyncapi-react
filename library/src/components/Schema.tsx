@@ -24,7 +24,7 @@ const SchemaContext = React.createContext({
 
 export const Schema: React.FunctionComponent<Props> = ({
   schemaName,
-  schema,
+  schema: schemaProp,
   required = false,
   isPatternProperty = false,
   isProperty = false,
@@ -35,6 +35,9 @@ export const Schema: React.FunctionComponent<Props> = ({
   isArray = false,
   // eslint-disable-next-line sonarjs/cognitive-complexity
 }) => {
+  const mergedSchema =
+    schemaProp && SchemaHelpers.mergeAllOf(schemaProp);
+  const schema = mergedSchema ?? schemaProp;
   const { reverse, deepExpanded } = useContext(SchemaContext);
   const [expanded, setExpanded] = useState(propExpanded || isArray);
   const [deepExpand, setDeepExpand] = useState(false);
@@ -76,7 +79,12 @@ export const Schema: React.FunctionComponent<Props> = ({
   const schemaType = SchemaHelpers.toSchemaType(schema);
   const isExpandable = SchemaHelpers.isExpandable(schema) || dependentSchemas;
 
-  isCircular = isCircular || schema.isCircular() || false;
+  const originalCircular =
+    schemaProp && typeof schemaProp.isCircular === 'function'
+      ? schemaProp.isCircular()
+      : false;
+  isCircular =
+    isCircular || schema.isCircular() || originalCircular || false;
   const uid = schema.$id();
   const styledSchemaName = isProperty ? 'italic' : '';
   const renderedSchemaName =

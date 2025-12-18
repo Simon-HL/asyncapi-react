@@ -59,6 +59,8 @@ const jsonSchemaKeywordTypes: Record<string, string> = {
 };
 const jsonSchemaKeywords = Object.keys(jsonSchemaKeywordTypes);
 
+type JSONSchema = boolean | Record<string, unknown>;
+
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class SchemaHelpers {
   static extRenderAdditionalInfo = 'x-schema-private-render-additional-info';
@@ -271,6 +273,20 @@ export class SchemaHelpers {
     return new SchemaClass(json);
   }
 
+  static mergeAllOf(
+    schema: SchemaInterface,
+  ): SchemaInterface | undefined {
+    const composedSchemas =
+      typeof schema?.allOf === 'function' ? schema.allOf() : undefined;
+    if (!composedSchemas || composedSchemas.length === 0) {
+      return undefined;
+    }
+
+    const mergedJson = this.mergeAllOfSchemaToJSON(schema);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+    return new SchemaClass(mergedJson as any);
+  }
+
   /**
    * Retrieves from given value all custom extensions (value with key started by `x-`).
    * However, it skips those private extensions that begin with `x-parser-` and `x-schema-private-`.
@@ -361,6 +377,93 @@ export class SchemaHelpers {
     };
     // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
     return new SchemaClass(json as any);
+  }
+
+  private static mergeAllOfSchemaToJSON(schema: SchemaInterface): JSONSchema {
+    const rawJson = this.cloneJSON(schema.json());
+    if (!this.isPlainObject(rawJson)) {
+      return rawJson;
+    }
+
+    const { allOf, ...rest } = rawJson;
+    const baseSchema = rest as Record<string, unknown>;
+
+    const composedSchemas = schema.allOf();
+    if (!composedSchemas || composedSchemas.length === 0) {
+      return baseSchema;
+    }
+
+    return composedSchemas.reduce<JSONSchema>((acc, currentSchema) => {
+      const currentJson = this.mergeAllOfSchemaToJSON(currentSchema);
+      return this.mergeSchemaJSON(acc, currentJson);
+    }, baseSchema);
+  }
+
+  private static mergeSchemaJSON(
+    target: JSONSchema | undefined,
+    source: JSONSchema,
+  ): JSONSchema {
+    if (target === false || source === false) {
+      return false;
+    }
+    if (source === true) {
+      return this.cloneJSON(target ?? {});
+    }
+    if (target === true || target === undefined) {
+      target = {};
+    }
+
+    const result = this.cloneJSON(target) as Record<string, unknown>;
+    const sourceObj = this.cloneJSON(source) as Record<string, unknown>;
+
+    Object.entries(sourceObj).forEach(([key, value]) => {
+      if (value === undefined) {
+        return;
+      }
+      if (key === 'required' && Array.isArray(value)) {
+        const existing = Array.isArray(result.required)
+          ? (result.required as string[])
+          : [];
+        const merged = Array.from(
+          new Set([...existing, ...(value as string[])]),
+        );
+        result.required = merged;
+        return;
+      }
+
+      if (this.isPlainObject(value)) {
+        const baseValue = result[key];
+        if (this.isPlainObject(baseValue)) {
+          result[key] = this.mergeSchemaJSON(
+            baseValue as JSONSchema,
+            value as JSONSchema,
+          );
+        } else {
+          result[key] = this.cloneJSON(value);
+        }
+        return;
+      }
+
+      result[key] = Array.isArray(value) ? this.cloneJSON(value) : value;
+    });
+
+    return result;
+  }
+
+  private static cloneJSON<T>(value: T): T {
+    if (value === undefined || value === null) {
+      return value;
+    }
+    if (typeof value === 'object') {
+      return JSON.parse(JSON.stringify(value)) as T;
+    }
+    return value;
+  }
+
+  private static isPlainObject(
+    value: unknown,
+  ): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
   private static toType(type: string, schema: SchemaInterface): string {
