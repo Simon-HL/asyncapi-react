@@ -15,6 +15,7 @@ import { useConfig } from '../../contexts';
 import { CommonHelpers } from '../../helpers';
 import {
   CONTENT_TYPES_SITE,
+  DEPRECATED_TEXT,
   EXTERAL_DOCUMENTATION_TEXT,
 } from '../../constants';
 
@@ -45,6 +46,8 @@ export const Message: React.FunctionComponent<Props> = ({
   const headers = message.headers();
   const correlationId = message.correlationId();
 
+  const deprecatedStatus = message.json<{ deprecated?: boolean }>();
+  const isDeprecated = deprecatedStatus?.deprecated === true;
   const contentType = message.contentType();
   const externalDocs = message.externalDocs();
   const showInfoList = contentType ?? externalDocs;
@@ -53,11 +56,16 @@ export const Message: React.FunctionComponent<Props> = ({
     <div className="panel-item">
       <div className="panel-item--center px-8">
         <div className="shadow rounded bg-gray-200 p-4 border">
-          <div>
+          <div className="flex flex-wrap items-center gap-2">
             {index !== undefined && (
               <strong className="text-gray-700 mr-2">#{index}</strong>
             )}
             {title && <span className="text-gray-700 mr-2">{title}</span>}
+            {isDeprecated && (
+              <strong className="bg-red-600 text-white uppercase rounded px-2 py-1 text-xs">
+                {DEPRECATED_TEXT}
+              </strong>
+            )}
           </div>
 
           {summary && <p className="text-gray-600 text-sm">{summary}</p>}
